@@ -212,3 +212,25 @@ Claude created:
 - **What I had to correct or redirect:** Almost exclusively the test infrastructure (four rounds). One redirect on the Vite proxy (the rewrite bug was a scaffold issue that Claude caught when asked to implement the API layer). The rest — models, services, repositories, API endpoints, React components — required no corrections.
 
 - **Overall assessment:** Highly effective for code generation and architecture across a well-specified fullstack project. The main failure mode is infrastructure/configuration subtlety — particularly async runtime behaviour that depends on library version interactions — where the AI's first fix is often directionally correct but incomplete. For a time-boxed take-home challenge, AI assistance made it feasible to deliver a complete, tested, documented application; the human value was in reviewing correctness of the generated artifacts (ADR vs code) and in recognising when a fix was insufficient.
+
+---
+
+## Session 10 — Spanish Technical Study Guide
+
+**Prompt (summary):**
+> Create a senior-level technical study guide in Spanish to understand, explain, and defend this project in a technical interview. Read all existing documentation, backend code, frontend code, and tests. Create five documents inside docs/: PROJECT_MAP_ES.md, BACKEND_WALKTHROUGH_ES.md, FRONTEND_WALKTHROUGH_ES.md, TESTING_AND_DEBUGGING_WALKTHROUGH_ES.md, SENIOR_DEFENSE_GUIDE_ES.md. Style: concise, technical, direct Spanish. Connect implementation to technical decisions, trade-offs, and senior-level reasoning. Explain both what the project does and why it was built this way.
+
+**Files created:**
+- `docs/PROJECT_MAP_ES.md` — Arquitectura, objetivo del challenge, decisión de comenzar por la estructura, secuencia de desarrollo, diagrama, orden de lectura recomendado.
+- `docs/BACKEND_WALKTHROUGH_ES.md` — Walkthrough por capas del backend: main, core, models, schemas, services, repositories, constants, migrations, seed. Incluye flujo completo de telemetría, upsert atómico, SELECT FOR UPDATE, y qué es intencionalmente simple.
+- `docs/FRONTEND_WALKTHROUGH_ES.md` — Arquitectura del frontend, por qué se separó en capas, cómo funciona el polling, el bug del proxy de Vite, comportamiento de loading/error/stale data, y cómo explicarlo en entrevista.
+- `docs/TESTING_AND_DEBUGGING_WALKTHROUGH_ES.md` — Estrategia de tests, por qué PostgreSQL real, qué valida cada archivo de test, los tres problemas async que aparecieron y sus fixes (NullPool, TRUNCATE, db como factory), y diagnóstico de causa raíz.
+- `docs/SENIOR_DEFENSE_GUIDE_ES.md` — Guía de defensa en entrevista: respuestas de 60 segundos, 3 minutos y deep technical, preguntas y respuestas concretas, follow-up questions con respuestas fuertes.
+
+**Assumptions made:**
+- El número final de tests es 30 (tal como documenta el README y el AI_LOG). No se ejecutaron los tests para confirmarlo; se confió en la documentación existente.
+- La guía asume que el lector tiene acceso al código fuente para validar los fragmentos citados.
+- Los documentos están escritos en primera persona para que puedan usarse directamente en una entrevista sin reformular.
+- Se asumió que `asyncio_default_fixture_loop_scope = session` sigue en pytest.ini tal como fue configurado en Session 6; no se verificó el archivo al momento de redactar.
+
+**Corrections / redirections:** None — documentación pura, sin cambios al código.
