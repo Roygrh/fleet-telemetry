@@ -215,22 +215,30 @@ Claude created:
 
 ---
 
-## Session 10 — Spanish Technical Study Guide
 
-**Prompt (summary):**
-> Create a senior-level technical study guide in Spanish to understand, explain, and defend this project in a technical interview. Read all existing documentation, backend code, frontend code, and tests. Create five documents inside docs/: PROJECT_MAP_ES.md, BACKEND_WALKTHROUGH_ES.md, FRONTEND_WALKTHROUGH_ES.md, TESTING_AND_DEBUGGING_WALKTHROUGH_ES.md, SENIOR_DEFENSE_GUIDE_ES.md. Style: concise, technical, direct Spanish. Connect implementation to technical decisions, trade-offs, and senior-level reasoning. Explain both what the project does and why it was built this way.
 
-**Files created:**
-- `docs/PROJECT_MAP_ES.md` — Arquitectura, objetivo del challenge, decisión de comenzar por la estructura, secuencia de desarrollo, diagrama, orden de lectura recomendado.
-- `docs/BACKEND_WALKTHROUGH_ES.md` — Walkthrough por capas del backend: main, core, models, schemas, services, repositories, constants, migrations, seed. Incluye flujo completo de telemetría, upsert atómico, SELECT FOR UPDATE, y qué es intencionalmente simple.
-- `docs/FRONTEND_WALKTHROUGH_ES.md` — Arquitectura del frontend, por qué se separó en capas, cómo funciona el polling, el bug del proxy de Vite, comportamiento de loading/error/stale data, y cómo explicarlo en entrevista.
-- `docs/TESTING_AND_DEBUGGING_WALKTHROUGH_ES.md` — Estrategia de tests, por qué PostgreSQL real, qué valida cada archivo de test, los tres problemas async que aparecieron y sus fixes (NullPool, TRUNCATE, db como factory), y diagnóstico de causa raíz.
-- `docs/SENIOR_DEFENSE_GUIDE_ES.md` — Guía de defensa en entrevista: respuestas de 60 segundos, 3 minutos y deep technical, preguntas y respuestas concretas, follow-up questions con respuestas fuertes.
+## Session 10 — Post-interview Hardening
 
-**Assumptions made:**
-- El número final de tests es 30 (tal como documenta el README y el AI_LOG). No se ejecutaron los tests para confirmarlo; se confió en la documentación existente.
-- La guía asume que el lector tiene acceso al código fuente para validar los fragmentos citados.
-- Los documentos están escritos en primera persona para que puedan usarse directamente en una entrevista sin reformular.
-- Se asumió que `asyncio_default_fixture_loop_scope = session` sigue en pytest.ini tal como fue configurado en Session 6; no se verificó el archivo al momento de redactar.
+**Prompt:**
+> Improve the project with focused post-interview enhancements before pushing it again to GitHub. Add frontend tests, GitHub Actions CI, a concurrency demo script, scalability notes, production readiness notes, and update the README. Do not rewrite the project or change the core architecture.
 
-**Corrections / redirections:** None — documentación pura, sin cambios al código.
+**Output:**
+Claude added:
+- frontend tests with Vitest and React Testing Library
+- tests for dashboard states, FleetSummary, ZoneCounts, VehicleTable, and useFleetData
+- `.github/workflows/ci.yml`
+- `scripts/concurrent_zone_test.py`
+- `docs/SCALABILITY_NOTES.md`
+- `docs/PRODUCTION_READINESS.md`
+- README updates with test commands and post-interview improvements
+
+**Corrections / redirections:**
+- Changed `@testing-library/jest-dom` to `@testing-library/jest-dom/vitest`.
+- Added explicit React Testing Library cleanup after each test.
+- Fixed an ambiguous test assertion caused by multiple `—` placeholders.
+- Replaced `Array.prototype.at(-1)` with an index-based lookup to match the current TypeScript target.
+- Rebuilt the frontend Docker image after adding Vitest dependencies.
+- Corrected the concurrency demo input by using a valid zone such as `charging_bay_2` instead of an invalid default zone.
+
+**Result:**
+The hardening pass addressed the main interview discussion points: frontend test coverage, CI, concurrency demonstration, scalability planning, and production readiness.

@@ -1792,22 +1792,6 @@ At the end, show:
 - recommended reading order
 ```
 
-### What Claude Code generated
-
-It created the five study documents inside `docs/` (in this project they exist as the Spanish versions: `PROJECT_MAP_ES.md`, `BACKEND_WALKTHROUGH_ES.md`, `FRONTEND_WALKTHROUGH_ES.md`, `TESTING_AND_DEBUGGING_WALKTHROUGH_ES.md`, and `SENIOR_DEFENSE_GUIDE_ES.md`), covering architecture, the backend and frontend walkthrough, the test strategy and async debugging, and an interview defense guide.
-
-### How I validated it
-
-I reviewed that the documents were consistent with the source code and the rest of the documentation (same count of 30 tests, same technical decisions).
-
-### What I had to correct
-
-No code: this is documentation only. The single documented assumption was taking the count of 30 tests from the existing documentation.
-
-### Outcome of the stage
-
-A set of study documents that complements the ADR and the AI log, useful to understand and defend the project end to end.
-
 ---
 
 ## Closing
@@ -1825,3 +1809,27 @@ In the end, AI did not replace technical judgment. ChatGPT helped me plan and sp
   - For **stage 15**, the `PROMPTS_USED.md` study-walkthrough prompt requests English filenames (e.g., `PROJECT_MAP.md`); the files that actually exist in the repo are the `*_ES.md` versions, which I noted in the narrative.
   - The **30 passing tests** figure was taken from the existing documentation; the suite was not re-executed while writing this document.
   - Per the rules, I excluded prompts about consolidation, demo/interview preparation, translation, and rewriting AI_LOG.
+
+
+## Final post-interview hardening pass
+
+After the interview, I reviewed the main technical discussion points and made a focused hardening pass without changing the core architecture.
+
+The interviewer asked about frontend testing, scalability, production readiness, and how to demonstrate concurrency outside of automated tests. Based on that feedback, I added:
+
+- frontend tests with Vitest and React Testing Library;
+- GitHub Actions CI for backend tests, frontend tests, and frontend build;
+- a standard-library concurrency demo script for zone counter validation;
+- scalability notes explaining how the design would evolve at thousands of events per second;
+- production readiness notes listing the next steps before a real deployment;
+- README updates documenting how to run the new validations.
+
+During validation, I fixed several small issues:
+- the Vitest setup needed `@testing-library/jest-dom/vitest`;
+- test cleanup had to be explicit between React tests;
+- one table test had an ambiguous `—` placeholder assertion;
+- `Array.prototype.at(-1)` was incompatible with the current TypeScript target;
+- the frontend Docker image had to be rebuilt after adding new dependencies;
+- the concurrency script had to use one of the hardcoded valid zones.
+
+This pass was intentionally limited. I did not add Kafka, WebSockets, Kubernetes, or cloud deployment code because those would have expanded the project beyond the take-home scope. Instead, I documented how the system would evolve at larger scale and strengthened the existing vertical slice with tests, CI, and clearer operational notes.

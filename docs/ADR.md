@@ -103,3 +103,16 @@ A rollback on any step leaves vehicles, missions, and maintenance records unchan
 | Geospatial rendering | Zone counts satisfy the spec; a map requires a mapping library |
 | Push alerts | Anomalies are stored and queryable; no webhooks or notification channels |
 | Lat / lon in vehicle list | Present in telemetry events and DB; the spec's dashboard only requires status, battery, and anomaly |
+
+## Decision 7 — Post-interview hardening without changing the core architecture
+
+After the technical interview, I added a small hardening pass focused on the main discussion points: frontend test coverage, CI validation, a manual concurrency demo script, scalability notes, and production readiness documentation.
+
+I deliberately did not introduce Kafka, WebSockets, Kubernetes, or a cloud deployment implementation in this version. Those are valid next steps at higher scale, but they would have changed the scope of the take-home. The goal was to strengthen the existing vertical slice while keeping the original architecture intact.
+
+The additions were:
+- Vitest and React Testing Library tests for the dashboard and data hook.
+- GitHub Actions CI for backend tests, frontend tests, and frontend build.
+- A concurrency demo script for the atomic zone counter.
+- Scalability notes explaining what would change at thousands of events per second.
+- Production readiness notes listing the next steps before a real deployment.

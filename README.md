@@ -170,6 +170,71 @@ fleet-telemetry/
 
 ---
 
+## Running Tests
+
+### Backend tests
+
+The backend tests require a separate PostgreSQL database. Run these inside the running Docker environment.
+
+```bash
+# One-time setup (creates the test database)
+docker compose exec postgres createdb -U fleet fleet_telemetry_test
+
+# Run all backend tests
+docker compose exec backend pytest -v
+```
+
+### Frontend tests
+
+```bash
+cd frontend
+
+# Install dependencies (first time only, or after adding new packages)
+npm install
+
+# Run tests in watch mode
+npm run test
+
+# Run tests once (CI mode)
+npm run test:run
+
+# Build the frontend
+npm run build
+```
+
+### Concurrency demo
+
+Demonstrate the atomic zone counter under concurrent load (requires the app to be running):
+
+```bash
+python scripts/concurrent_zone_test.py
+# Optional: python scripts/concurrent_zone_test.py 40 charging_bay_1
+python scripts/concurrent_zone_test.py
+# Optional: python scripts/concurrent_zone_test.py 40 charging_bay_2
+```
+
+Then verify the final count:
+
+```bash
+curl http://localhost:8000/api/zones/counts | python -m json.tool
+```
+
+---
+
+## Post-interview improvements
+
+The following were added after the technical interview to address discussion points about testing, CI, concurrency demonstration, and production readiness planning. The core architecture was not changed.
+
+| Addition | What it covers |
+|---|---|
+| **Frontend tests** (`src/__tests__/`) | Vitest + React Testing Library. Covers dashboard states (loading, error, data), `FleetSummary`, `ZoneCounts`, `VehicleTable`, and `useFleetData` hook with mocked fetch |
+| **GitHub Actions CI** (`.github/workflows/ci.yml`) | Backend tests (with PostgreSQL service container), frontend tests, and frontend build on every push |
+| **Concurrency demo script** (`scripts/concurrent_zone_test.py`) | Sends N concurrent zone events and compares before/after counts to demonstrate atomic upsert correctness outside of pytest |
+| **Scalability notes** (`docs/SCALABILITY_NOTES.md`) | Explains current limits, what changes at thousands of events/second (Kafka, Redis counters, table partitioning, read replicas) |
+| **Production readiness notes** (`docs/PRODUCTION_READINESS.md`) | Enumerates what is solid now vs. what would be needed before a real deployment (auth, rate limiting, secrets, CD pipeline, observability) |
+
+---
+
 ## Known Limitations
 
 - **No authentication.** All endpoints are publicly accessible. Auth is out of scope for this prototype.

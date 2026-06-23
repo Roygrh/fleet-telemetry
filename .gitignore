@@ -36,3 +36,7 @@ postgres_data/
 
 #Claude code
 .claude/
+
+# Local Spanish notes
+docs/*_ES.md
+docs/*_ES_*.md
