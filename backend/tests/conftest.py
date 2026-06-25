@@ -73,7 +73,8 @@ async def _schema() -> AsyncGenerator[None, None]:
 
 _TRUNCATE = text(
     "TRUNCATE TABLE "
-    "maintenance_records, anomalies, missions, telemetry_events, zone_counters, vehicles "
+    "teleoperation_sessions, maintenance_records, anomalies, missions, "
+    "telemetry_events, zone_counters, vehicles "
     "RESTART IDENTITY CASCADE"
 )
 

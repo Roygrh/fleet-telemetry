@@ -92,19 +92,31 @@ At scale, unobserved systems fail silently. Key additions:
 At 5 000+ vehicles, polling every 2 seconds from every connected browser generates significant read traffic. Alternatives:
 
 - **Server-Sent Events (SSE)** — server pushes updates; no repeated polling overhead.
-- **WebSockets** — bidirectional, useful if the dashboard ever sends commands.
+- **WebSockets** — bidirectional, appropriate when the client also needs to send commands.
 
-The current polling architecture was a deliberate choice for 50 vehicles (see `docs/ADR.md`). Switching requires a connection manager (e.g., Redis pub/sub fanout) and client reconnection logic.
+The current polling architecture was a deliberate choice for the 50-vehicle telemetry dashboard (see `docs/ADR.md`). Switching requires a connection manager (e.g., Redis pub/sub fanout) and client reconnection logic.
+
+### Teleoperation WebSocket delivery
+
+WebSockets were added later as part of the Teleoperation Handoff Prototype — a separate module where bidirectional real-time communication is required (operator sends commands; vehicle sends sensor data back). This is a different use case from the status dashboard and justifies the added complexity:
+
+- **Operator commands require sub-second latency** — polling would be too slow.
+- **The connection is per-session, not per-vehicle** — fanout requirements are low.
+- **The in-memory connection manager** is correct at one server. At multiple replicas, Redis Pub/Sub or a dedicated WebSocket gateway would replace it.
+
+At production scale, the teleoperation stack would also require: Redis Pub/Sub for multi-replica fanout, JWT operator authentication, command ACKs with sequence numbers, a deadman-switch watchdog, and WebRTC for real video/audio (replacing the current text-label camera feed).
 
 ---
 
 ## Why these were not implemented in the take-home version
 
-The challenge specified 50 vehicles at 1 Hz, a scope where:
+The original take-home challenge specified 50 vehicles at 1 Hz, a scope where:
 
 - A single PostgreSQL node handles the load with headroom.
 - Atomic SQL upserts eliminate the need for Redis or external coordination.
-- Polling every 2 seconds is responsive without the operational cost of WebSockets.
+- 2-second polling is responsive for the status dashboard without the operational cost of persistent WebSocket connections.
 - There is no need to partition a table that fits comfortably in memory.
 
-Adding Kafka, Redis, partitioning, or WebSockets would have introduced significant infrastructure complexity without improving correctness or demonstrating additional engineering judgment for the stated requirements. These choices are documented in `docs/ADR.md`.
+Adding Kafka, Redis, or table partitioning would have introduced significant infrastructure complexity without improving correctness for the stated requirements. These choices are documented in `docs/ADR.md`.
+
+WebSockets were deliberately excluded from the original telemetry dashboard. They were added later only for the Teleoperation Handoff Prototype, where the use case — a live operator sending commands and receiving sensor data in real time — genuinely requires bidirectional messaging. The two features have different latency profiles and connection lifetimes, which is why different transport choices are appropriate for each.

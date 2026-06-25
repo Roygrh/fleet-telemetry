@@ -20,7 +20,7 @@ Browser :5173
             └─ PostgreSQL :5432
 ```
 
-The dashboard polls all four API endpoints every 2 seconds. There are no WebSockets. See `docs/ADR.md` for the reasoning behind each major decision.
+The original fleet telemetry dashboard intentionally uses 2-second polling, as explained in the ADR. This keeps the base solution simple and appropriate for 50 vehicles at 1 Hz. The Teleoperation Handoff Prototype (added later) uses WebSockets only for the remote-control flow, where bidirectional real-time communication is required between the operator UI and the mock vehicle client. See `docs/ADR.md` for the reasoning behind each major decision.
 
 ---
 
@@ -82,11 +82,11 @@ The tests require a separate PostgreSQL database. Create it once, then run pytes
 # One-time setup
 docker compose exec postgres createdb -U fleet fleet_telemetry_test
 
-# Run all tests
-docker compose exec backend pytest
+# Run all 44 tests
+docker compose exec backend pytest -v
 ```
 
-Tests cover: telemetry ingestion, all four anomaly rules (including boundary values), zone counter concurrency (20 simultaneous requests via `asyncio.gather`), fault transition atomicity, and fleet state aggregation. All tests hit a real PostgreSQL database — no mocks.
+Tests cover: telemetry ingestion, all four anomaly rules (including boundary values), zone counter concurrency (20 simultaneous requests via `asyncio.gather`), fault transition atomicity, fleet state aggregation, and the full teleoperation session lifecycle. All tests hit a real PostgreSQL database — no mocks.
 
 ---
 
@@ -138,33 +138,92 @@ curl -X PATCH http://localhost:8000/api/vehicles/v-01/status \
   -d '{"status": "fault"}'
 ```
 
+### Teleoperation API
+
+HTTP endpoints manage the session lifecycle. WebSocket endpoints handle live operator commands and mock vehicle sensor updates.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/teleoperation/sessions` | Create a teleoperation handoff session |
+| GET | `/api/teleoperation/sessions` | List teleoperation sessions |
+| POST | `/api/teleoperation/sessions/{session_id}/claim` | Claim a requested session for an operator |
+| POST | `/api/teleoperation/sessions/{session_id}/release` | Release operator control |
+| WS | `/ws/teleoperation/operator/{session_id}` | Operator WebSocket for live commands and sensor feedback |
+| WS | `/ws/teleoperation/vehicle/{vehicle_id}` | Mock vehicle WebSocket for sensor updates and command reception |
+
 ---
 
 ## Project Structure
 
 ```
 fleet-telemetry/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                          # GitHub Actions CI
 ├── backend/
 │   ├── app/
-│   │   ├── api/          # FastAPI routers (thin controllers)
-│   │   ├── core/         # DB engine, config
-│   │   ├── models/       # SQLAlchemy ORM models
-│   │   ├── repositories/ # DB access layer (no business logic)
-│   │   ├── schemas/      # Pydantic request/response models
-│   │   └── services/     # Business logic
-│   ├── alembic/          # Database migrations
-│   ├── tests/            # pytest suite (real PostgreSQL)
-│   ├── seed.py           # Reference data seeder
+│   │   ├── api/
+│   │   │   ├── telemetry.py                # POST /api/telemetry
+│   │   │   ├── vehicles.py                 # GET/PATCH /api/vehicles
+│   │   │   ├── zones.py                    # GET /api/zones/counts
+│   │   │   ├── anomalies.py                # GET /api/anomalies
+│   │   │   ├── fleet.py                    # GET /api/fleet/state
+│   │   │   └── teleoperation.py            # HTTP + WS routes + connection manager
+│   │   ├── core/                           # DB engine, config
+│   │   ├── models/
+│   │   │   ├── vehicle.py
+│   │   │   ├── telemetry.py
+│   │   │   ├── zone.py
+│   │   │   ├── anomaly.py
+│   │   │   ├── mission.py
+│   │   │   ├── maintenance.py
+│   │   │   └── teleoperation.py            # TeleoperationSession model
+│   │   ├── repositories/                   # DB access layer (no business logic)
+│   │   │   └── teleoperation.py
+│   │   ├── schemas/                        # Pydantic request/response models
+│   │   │   └── teleoperation.py
+│   │   └── services/                       # Business logic
+│   │       └── teleoperation.py
+│   ├── alembic/
+│   │   └── versions/
+│   │       ├── 0001_initial_schema.py
+│   │       └── 0002_add_teleoperation_sessions.py
+│   ├── tests/
+│   │   ├── test_telemetry.py
+│   │   ├── test_vehicles.py
+│   │   ├── test_zones.py
+│   │   ├── test_fleet.py
+│   │   └── test_teleoperation.py
+│   ├── seed.py
 │   └── requirements.txt
 ├── frontend/
 │   └── src/
-│       ├── components/   # React UI components
-│       ├── hooks/        # useFleetData, usePolling
-│       ├── services/     # fetch wrappers
-│       └── types/        # TypeScript interfaces
+│       ├── components/
+│       │   ├── FleetSummary.tsx
+│       │   ├── VehicleTable.tsx
+│       │   ├── ZoneCounts.tsx
+│       │   ├── StatusBadge.tsx
+│       │   └── TeleoperationPanel.tsx
+│       ├── hooks/
+│       │   ├── useFleetData.ts
+│       │   ├── usePolling.ts
+│       │   └── useTeleoperation.ts
+│       ├── services/
+│       │   └── api.ts
+│       ├── types/
+│       │   └── index.ts
+│       └── __tests__/
+│           ├── TeleoperationPanel.test.tsx
+│           └── TeleoperationPanelCommands.test.tsx
+├── scripts/
+│   ├── concurrent_zone_test.py             # Atomic zone counter concurrency demo
+│   └── mock_vehicle_client.py              # Mock vehicle WebSocket client
 ├── docs/
-│   ├── ADR.md            # Architecture Decision Record
-│   └── AI_LOG.md         # AI interaction log
+│   ├── ADR.md                              # Architecture Decision Record
+│   ├── AI_LOG.md                           # AI interaction log
+│   ├── TELEOPERATION_PROTOTYPE.md          # Teleoperation design and demo guide
+│   ├── SCALABILITY_NOTES.md
+│   └── PRODUCTION_READINESS.md
 └── docker-compose.yml
 ```
 
@@ -172,33 +231,35 @@ fleet-telemetry/
 
 ## Running Tests
 
-### Backend tests
+All tests run inside Docker — no local Python or Node installation required beyond the containers.
 
-The backend tests require a separate PostgreSQL database. Run these inside the running Docker environment.
+### Backend tests (44 tests)
 
 ```bash
-# One-time setup (creates the test database)
+# One-time setup: create the test database
 docker compose exec postgres createdb -U fleet fleet_telemetry_test
 
-# Run all backend tests
+# Run all 44 tests
 docker compose exec backend pytest -v
 ```
 
-### Frontend tests
+### Frontend tests (43 tests)
+
+```bash
+# Run all tests
+docker compose exec frontend npm run test:run
+
+# TypeScript build check
+docker compose exec frontend npm run build
+```
+
+### Running frontend tests locally (optional)
 
 ```bash
 cd frontend
-
-# Install dependencies (first time only, or after adding new packages)
-npm install
-
-# Run tests in watch mode
-npm run test
-
-# Run tests once (CI mode)
-npm run test:run
-
-# Build the frontend
+npm install           # first time only
+npm run test          # watch mode
+npm run test:run      # single run (CI mode)
 npm run build
 ```
 
@@ -207,10 +268,11 @@ npm run build
 Demonstrate the atomic zone counter under concurrent load (requires the app to be running):
 
 ```bash
+# Default: 20 concurrent requests to charging_bay_2
 python scripts/concurrent_zone_test.py
-# Optional: python scripts/concurrent_zone_test.py 40 charging_bay_1
-python scripts/concurrent_zone_test.py
-# Optional: python scripts/concurrent_zone_test.py 40 charging_bay_2
+
+# Custom: 40 concurrent requests
+python scripts/concurrent_zone_test.py 40 charging_bay_2
 ```
 
 Then verify the final count:
@@ -218,6 +280,73 @@ Then verify the final count:
 ```bash
 curl http://localhost:8000/api/zones/counts | python -m json.tool
 ```
+
+---
+
+## Teleoperation Prototype
+
+A focused extension that demonstrates real-time operator-to-vehicle command streaming
+using FastAPI WebSockets. The original telemetry dashboard is unchanged and continues
+to use 2-second HTTP polling.
+
+### Session lifecycle
+
+```
+requested → claimed → active → released
+                             → completed
+                             → failed
+```
+
+- **requested** — created, waiting for an operator
+- **claimed** — operator assigned, WebSocket not yet open
+- **active** — operator WebSocket is live; commands and sensor data are flowing
+- **released** — operator returned control to the vehicle
+- **completed** / **failed** — documented terminal states; no separate HTTP endpoint yet
+
+### What it adds
+
+- **Session lifecycle** persisted in PostgreSQL (`teleoperation_sessions` table)
+- **WebSocket command channel** (`/ws/teleoperation/operator/{session_id}`) — operator sends commands
+- **WebSocket sensor channel** (`/ws/teleoperation/vehicle/{vehicle_id}`) — mock vehicle sends data back
+- **Frontend control panel** — claim/release, command buttons, live sensor feed
+- **Mock vehicle client** (`scripts/mock_vehicle_client.py`) — simulates the vehicle/device side
+
+### Demo commands
+
+```bash
+# 1. Build and start the full stack
+docker compose build backend frontend
+docker compose up -d postgres
+docker compose up -d backend
+docker compose exec backend alembic upgrade head
+docker compose exec backend python seed.py
+docker compose up -d frontend
+
+# 2. Open http://localhost:5173 and scroll to the Teleoperation panel
+
+# 3. Request a session (select v-01, click "Request Session")
+
+# 4. Claim the session (click "Claim" → status changes to "claimed")
+
+# 5. In a second terminal, run the mock vehicle client
+#    Requires: pip install websockets==13.1
+python scripts/mock_vehicle_client.py --vehicle-id v-01
+
+# 6. Click "Connect" in the dashboard → WS status turns green, session becomes "active"
+
+# 7. Click Forward / Left / Right / Backward / Stop
+#    Commands appear in the mock client terminal; sensor feed updates in the UI
+
+# 8. Click "Release" → status changes to "released"
+#    Command buttons disappear immediately without a page refresh.
+#    The backend closes the operator WebSocket and rejects any in-flight commands.
+#    The mock vehicle client may continue sending simulated sensor data — this is
+#    expected; the physical vehicle stays online after the operator releases control.
+```
+
+**Note on WebRTC:** This prototype uses WebSockets for text-based command and sensor JSON payloads. Real-time video from the vehicle would require WebRTC (with STUN/TURN infrastructure). WebRTC is not implemented and is documented as a production evolution path in `docs/TELEOPERATION_PROTOTYPE.md`.
+
+See `docs/TELEOPERATION_PROTOTYPE.md` for the full design and production evolution notes.
 
 ---
 
@@ -232,6 +361,7 @@ The following were added after the technical interview to address discussion poi
 | **Concurrency demo script** (`scripts/concurrent_zone_test.py`) | Sends N concurrent zone events and compares before/after counts to demonstrate atomic upsert correctness outside of pytest |
 | **Scalability notes** (`docs/SCALABILITY_NOTES.md`) | Explains current limits, what changes at thousands of events/second (Kafka, Redis counters, table partitioning, read replicas) |
 | **Production readiness notes** (`docs/PRODUCTION_READINESS.md`) | Enumerates what is solid now vs. what would be needed before a real deployment (auth, rate limiting, secrets, CD pipeline, observability) |
+| **Teleoperation Handoff Prototype** | WebSocket command/sensor flow, mock vehicle client (`scripts/mock_vehicle_client.py`), session lifecycle (requested → claimed → active → released), frontend control panel, backend/frontend tests, `docs/TELEOPERATION_PROTOTYPE.md` |TELEOPERATION_PROTOTYPE.md` |
 
 ---
 
@@ -240,6 +370,9 @@ The following were added after the technical interview to address discussion poi
 - **No authentication.** All endpoints are publicly accessible. Auth is out of scope for this prototype.
 - **Seeding is required before ingesting telemetry.** `vehicle_id` must be `v-01` through `v-50` and the vehicle must exist in the database (enforced by a foreign key).
 - **No retention policy.** Every telemetry event is persisted. The database will grow indefinitely without a pruning job.
-- **2-second polling.** Sub-second dashboard updates would require WebSockets or Server-Sent Events.
+- **2-second polling (telemetry dashboard).** The original fleet telemetry dashboard polls every 2 seconds. Sub-second updates would require WebSockets or Server-Sent Events. The Teleoperation prototype uses WebSockets only for the operator-to-vehicle command and sensor flow, not for the telemetry dashboard.
 - **Migrations are not automatic.** Run `alembic upgrade head` manually after the containers start.
 - **Single-node only.** No horizontal scaling or read replicas. See `docs/ADR.md` for what would change at larger scale.
+- **Teleoperation: no WebRTC video.** The `camera_frame_label` in sensor data is a text string. Real-time video would require WebRTC with STUN/TURN infrastructure.
+- **Teleoperation: no operator authentication.** `operator_id` is a free string. JWT enforcement, audit logs, command acknowledgements, and a deadman-switch watchdog are production requirements not yet implemented.
+- **Teleoperation: single-process connection manager.** The in-memory WebSocket registry does not survive a backend restart or scale to multiple replicas. Redis Pub/Sub would be required for multi-instance deployments.

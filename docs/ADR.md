@@ -108,7 +108,7 @@ A rollback on any step leaves vehicles, missions, and maintenance records unchan
 
 After the technical interview, I added a small hardening pass focused on the main discussion points: frontend test coverage, CI validation, a manual concurrency demo script, scalability notes, and production readiness documentation.
 
-I deliberately did not introduce Kafka, WebSockets, Kubernetes, or a cloud deployment implementation in this version. Those are valid next steps at higher scale, but they would have changed the scope of the take-home. The goal was to strengthen the existing vertical slice while keeping the original architecture intact.
+I deliberately did not introduce Kafka, WebSockets to the original telemetry dashboard, Kubernetes, or a cloud deployment implementation during this pass. Those are valid next steps at higher scale, but they would have changed the scope of the take-home. The goal was to strengthen the existing vertical slice while keeping the original dashboard architecture intact. WebSockets were added later as part of a separate Teleoperation Handoff Prototype module (see Decision 8).
 
 The additions were:
 - Vitest and React Testing Library tests for the dashboard and data hook.
@@ -116,3 +116,44 @@ The additions were:
 - A concurrency demo script for the atomic zone counter.
 - Scalability notes explaining what would change at thousands of events per second.
 - Production readiness notes listing the next steps before a real deployment.
+
+---
+
+## Decision 8 — Teleoperation prototype uses WebSockets and a mock vehicle client
+
+**Context:** The fleet service needs to demonstrate how a remote operator could take control
+of a vehicle in real time.
+
+**Decision:** Implement a lightweight teleoperation module using FastAPI WebSockets and a Python
+mock vehicle client script. No WebRTC, no Kafka, no TURN/STUN infrastructure.
+The original telemetry dashboard is unchanged and continues to use 2-second HTTP polling.
+WebSockets are introduced only for the teleoperation module where bidirectional real-time
+messaging is required.
+
+**Session lifecycle:**
+```
+requested → claimed → active → released / completed / failed
+```
+- `claimed` is set by HTTP `POST …/claim` (operator assigned).
+- `active` is set when the operator WebSocket connects (live command channel open).
+- `released` is set by HTTP `POST …/release`.
+- `completed` and `failed` are documented terminal states with no HTTP trigger yet.
+- Status is stored as a plain string — no PostgreSQL enum — so new states require no migration.
+
+**Rationale:**
+- The goal is to show the session lifecycle and command/sensor flow, not to build video infrastructure.
+- WebSockets are already supported by FastAPI/Starlette with zero additional server-side dependencies.
+- A Python mock client (`scripts/mock_vehicle_client.py`) using the `websockets` library simulates the vehicle, making the demo self-contained.
+- The in-memory connection manager is correct for a single-server prototype and is documented as the scale-out constraint.
+
+**Trade-offs accepted:**
+- No real video feed — camera output is a text label. WebRTC would be required in production.
+- Single-process connection manager — does not scale horizontally. Redis Pub/Sub would replace it.
+- No operator authentication — `operator_id` is a free string. JWT enforcement is the next step.
+
+**Separation:** All teleoperation code lives in `app/models/teleoperation.py`,
+`app/schemas/teleoperation.py`, `app/repositories/teleoperation.py`,
+`app/services/teleoperation.py`, and `app/api/teleoperation.py`. Existing modules are not
+modified except `main.py` (router registration) and `models/__init__.py` (ORM registration).
+
+See `docs/TELEOPERATION_PROTOTYPE.md` for the full design and demo guide.

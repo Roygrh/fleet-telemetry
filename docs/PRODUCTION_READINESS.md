@@ -11,7 +11,7 @@ This document describes what is already solid in the project, what was added as 
 - **Async throughout.** FastAPI + SQLAlchemy 2 (async) + asyncpg. Every DB operation is non-blocking; a slow query never stalls the event loop.
 - **Atomic writes.** Zone counter upserts and fault transitions use SQL-level atomicity (`INSERT … ON CONFLICT`, `SELECT FOR UPDATE`). No in-process locking needed.
 - **Repository / service separation.** Business logic is isolated from DB access; changing the storage layer does not touch the business rules.
-- **Real database tests.** All 30 backend tests hit a real PostgreSQL instance — no mocks. Concurrency correctness (20 simultaneous zone increments) is validated in `test_zones.py`.
+- **Real database tests.** All 44 backend tests hit a real PostgreSQL instance — no mocks. Concurrency correctness (20 simultaneous zone increments) is validated in `test_zones.py`.
 - **Schema migrations.** Alembic manages all schema changes. The migration history is reproducible.
 - **Environment-based configuration.** `DATABASE_URL` is read from the environment; no credentials are hardcoded.
 - **Health endpoint.** `GET /health` allows a load balancer or orchestrator to probe liveness.
@@ -26,7 +26,7 @@ This document describes what is already solid in the project, what was added as 
 ### Infrastructure
 
 - **Docker Compose** fully describes all three services (PostgreSQL, backend, frontend) with health checks and dependency ordering.
-- **No WebSocket complexity.** 2-second polling is reliable for 50 vehicles and requires no server-side connection state.
+- **Simple telemetry delivery.** The original telemetry dashboard still uses 2-second HTTP polling — reliable for 50 vehicles and requires no server-side connection state. The teleoperation prototype intentionally adds WebSockets only for the operator-to-vehicle command and simulated sensor flow, where bidirectional real-time communication is required.
 
 ---
 
@@ -41,6 +41,26 @@ These were added after the technical discussion to address feedback and demonstr
 | **Concurrency demo script** (`scripts/concurrent_zone_test.py`) | Make the atomic zone counter easy to demonstrate outside of pytest |
 | **Scalability notes** (`docs/SCALABILITY_NOTES.md`) | Explain current limits and what would change at higher event volume |
 | **Production readiness notes** (this file) | Enumerate what would be needed before a real deployment |
+| **Teleoperation Handoff Prototype** | WebSocket command flow, mock vehicle client, session lifecycle (requested → claimed → active → released), frontend control panel, 44 backend + 43 frontend tests. See below. |
+
+### Teleoperation Handoff Prototype — current state
+
+The teleoperation module demonstrates a real-time operator-to-vehicle command channel using FastAPI WebSockets. What is solid:
+
+- Session lifecycle is persisted in PostgreSQL — requests, claims, activations, and releases are durable and auditable.
+- The WebSocket command loop guards against stale connections: the backend checks session status before forwarding any command.
+- Releasing a session immediately closes the operator WebSocket — commands are rejected both server-side (status guard) and client-side (UI disables buttons synchronously).
+- The mock vehicle WebSocket is intentionally left open after release, reflecting the physical reality that a vehicle stays online regardless of operator session state.
+- Backend and frontend tests cover the full HTTP lifecycle and the command button guard logic.
+
+What is not yet production-ready for teleoperation:
+
+- **No operator authentication** — `operator_id` is a free string. JWT or session token verification is required.
+- **No audit log** — every command with operator identity, timestamp, and vehicle response should be persisted for incident review.
+- **No command acknowledgements** — commands are fire-and-forget. A sequence number + ACK protocol is needed so the operator knows whether each command was received.
+- **No deadman switch** — if the operator WebSocket drops unexpectedly, the vehicle receives no automatic stop command. A server-side watchdog timer should send `stop` and mark the session `failed`.
+- **No video feed** — the `camera_frame_label` is a text string. WebRTC with a STUN/TURN server is the production path for real-time video.
+- **In-memory connection manager** — does not survive a backend restart or scale to multiple replicas. Redis Pub/Sub or a dedicated WebSocket gateway would be required.
 
 ---
 

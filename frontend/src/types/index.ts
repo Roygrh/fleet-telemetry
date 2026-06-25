@@ -1,4 +1,5 @@
 export type VehicleStatus = 'idle' | 'moving' | 'charging' | 'fault';
+export type TeleoperationStatus = 'requested' | 'claimed' | 'active' | 'released' | 'completed' | 'failed';
 
 export interface Anomaly {
   id: number;
@@ -32,4 +33,29 @@ export interface ZoneCount {
 
 export interface ZoneCountResponse {
   zones: ZoneCount[];
+}
+
+export interface VehicleSensorPayload {
+  vehicle_id: string;
+  mode: string;
+  speed_mps: number;
+  battery_pct: number;
+  obstacle_distance_m: number;
+  connection_quality: string;
+  camera_frame_label: string;
+  last_command_echo: string | null;
+}
+
+export interface TeleoperationSession {
+  id: number;
+  session_id: string;
+  vehicle_id: string;
+  status: TeleoperationStatus;
+  operator_id: string | null;
+  reason: string | null;
+  created_at: string;
+  claimed_at: string | null;
+  released_at: string | null;
+  last_command: string | null;
+  last_sensor_payload: VehicleSensorPayload | null;
 }

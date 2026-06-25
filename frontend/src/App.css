@@ -230,6 +230,71 @@ body {
   font-size: 13px;
 }
 
+/* ---- Teleoperation Panel ---- */
+.teleop-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+.teleop-create { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.teleop-select { padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 5px; font-size: 13px; background: #fff; }
+.teleop-input { flex: 1; min-width: 140px; padding: 6px 10px; border: 1px solid #e2e8f0; border-radius: 5px; font-size: 13px; }
+
+.teleop-error { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 8px 12px; border-radius: 5px; font-size: 13px; }
+
+/* Session table */
+.teleop-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.teleop-table th { background: #f8fafc; font-weight: 600; color: #475569; text-align: left; padding: 8px 12px; border-bottom: 1px solid #e2e8f0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+.teleop-table td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.teleop-table tbody tr:last-child td { border-bottom: none; }
+.teleop-row--active { background: #f0fdf4; }
+.teleop-actions { display: flex; gap: 6px; }
+
+/* Status badges */
+.teleop-status-badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
+.teleop-status--requested  { background: #fef9c3; color: #854d0e; }
+.teleop-status--claimed    { background: #e0e7ff; color: #3730a3; }
+.teleop-status--active     { background: #d1fae5; color: #065f46; }
+.teleop-status--released   { background: #f1f5f9; color: #475569; }
+.teleop-status--completed  { background: #f0fdf4; color: #166534; }
+.teleop-status--failed     { background: #fee2e2; color: #991b1b; }
+
+/* WS status badge in panel header */
+.panel__header { display: flex; align-items: center; justify-content: space-between; }
+.teleop-ws-badge { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 9999px; text-transform: capitalize; }
+.teleop-ws-badge--disconnected      { background: #f1f5f9; color: #64748b; }
+.teleop-ws-badge--connecting        { background: #fef9c3; color: #854d0e; }
+.teleop-ws-badge--connected         { background: #d1fae5; color: #065f46; }
+.teleop-ws-badge--vehicle_not_connected { background: #ffedd5; color: #9a3412; }
+
+/* Buttons */
+.teleop-btn { padding: 5px 12px; border: none; border-radius: 5px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.teleop-btn--primary    { background: #3b82f6; color: #fff; }
+.teleop-btn--primary:hover { background: #2563eb; }
+.teleop-btn--claim      { background: #10b981; color: #fff; }
+.teleop-btn--claim:hover { background: #059669; }
+.teleop-btn--connect    { background: #6366f1; color: #fff; }
+.teleop-btn--connect:hover { background: #4f46e5; }
+.teleop-btn--disconnect { background: #64748b; color: #fff; }
+.teleop-btn--release    { background: #f59e0b; color: #fff; }
+.teleop-btn--release:hover { background: #d97706; }
+
+/* Control panel */
+.teleop-control-panel { border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; background: #fafafa; }
+.teleop-control-panel__title { font-weight: 600; font-size: 13px; color: #334155; margin-bottom: 12px; }
+
+.teleop-commands { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.teleop-cmd { padding: 10px 4px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; background: #0f172a; color: #f8fafc; transition: background 0.15s; }
+.teleop-cmd:hover:not(:disabled) { background: #1e293b; }
+.teleop-cmd:disabled { opacity: 0.4; cursor: not-allowed; }
+.teleop-cmd--stop { background: #dc2626; }
+.teleop-cmd--stop:hover:not(:disabled) { background: #b91c1c; }
+
+/* Sensor feed */
+.teleop-sensor-feed { margin-top: 14px; border-top: 1px solid #e2e8f0; padding-top: 14px; }
+.teleop-sensor-feed__title { font-weight: 600; font-size: 12px; color: #475569; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+.teleop-sensor-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; font-size: 13px; }
+.teleop-sensor-label { color: #64748b; font-weight: 500; }
+.teleop-sensor-value { color: #0f172a; font-family: 'SFMono-Regular', Consolas, monospace; }
+.teleop-waiting { color: #94a3b8; font-size: 13px; }
+
 /* ---- Responsive ---- */
 @media (max-width: 960px) {
   .fleet-summary { grid-template-columns: repeat(3, 1fr); }

@@ -2,6 +2,7 @@ import './App.css';
 import { ErrorState } from './components/ErrorState';
 import { FleetSummary } from './components/FleetSummary';
 import { LoadingState } from './components/LoadingState';
+import { TeleoperationPanel } from './components/TeleoperationPanel';
 import { VehicleTable } from './components/VehicleTable';
 import { ZoneCounts } from './components/ZoneCounts';
 import { useFleetData } from './hooks/useFleetData';
@@ -47,6 +48,8 @@ function App() {
             <ZoneCounts zones={zoneCounts} />
           </div>
         </div>
+
+        <TeleoperationPanel />
       </main>
     </div>
   );

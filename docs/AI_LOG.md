@@ -242,3 +242,136 @@ Claude added:
 
 **Result:**
 The hardening pass addressed the main interview discussion points: frontend test coverage, CI, concurrency demonstration, scalability planning, and production readiness.
+
+---
+
+## Session 11 — Teleoperation Handoff Prototype
+
+**Prompt:**
+> Add a focused Teleoperation Handoff Prototype module. Implement a lightweight teleoperation
+> handoff prototype using FastAPI WebSockets. Use a Python mock vehicle client to simulate the
+> vehicle side. Add HTTP session lifecycle endpoints, WebSocket operator and vehicle routes,
+> a frontend control panel, backend and frontend tests, and full documentation.
+
+**Output:**
+Claude created:
+
+**Backend:**
+- `app/models/teleoperation.py` — `TeleoperationSession` model with string status (avoids PostgreSQL enum migration complexity), FK to vehicles, nullable fields for operator, timestamps, last command, last sensor payload
+- `app/schemas/teleoperation.py` — Create, claim, release, response, operator command (Literal union), and vehicle sensor message schemas with `vehicle_id` format validation reused from telemetry schema
+- `app/repositories/teleoperation.py` — Thin async DB access: create, get_by_session_id, list_sessions, claim, release, record_command, record_sensor_payload, get_active_session_for_vehicle
+- `app/services/teleoperation.py` — Session lifecycle logic with HTTPException for 404/409 states; business rule: only `requested` sessions can be claimed; only `active`/`requested` sessions can be released
+- `app/api/teleoperation.py` — HTTP router (`/api/teleoperation`) + WebSocket router (`/ws/teleoperation`) + `_ConnectionManager` class with per-socket send locks to prevent concurrent write interleaving
+- `alembic/versions/0002_add_teleoperation_sessions.py` — Standalone migration, `down_revision = "0001"`, no changes to existing schema
+- `tests/test_teleoperation.py` — 12 tests covering create, claim, release, 404 / 409 error paths, full lifecycle with DB assertion
+
+**Frontend:**
+- `src/types/index.ts` — Added `TeleoperationStatus`, `VehicleSensorPayload`, `TeleoperationSession` interfaces
+- `src/services/api.ts` — Added `apiPost` helper and `fetchTeleoperationSessions`, `createTeleoperationSession`, `claimTeleoperationSession`, `releaseTeleoperationSession`
+- `src/hooks/useTeleoperation.ts` — Manages session polling (3 s), WebSocket lifecycle (connect/disconnect/send), sensor data state, and error state; WebSocket URL uses `window.location.hostname` so it works both locally and in Docker
+- `src/components/TeleoperationPanel.tsx` — Complete control panel: vehicle selector (v-01..v-50), reason input, session table with Claim/Connect/Disconnect/Release actions, command buttons (Forward/Backward/Left/Right/Stop), live sensor feed grid
+- `src/__tests__/TeleoperationPanel.test.tsx` — Mocked API + minimal WebSocket mock; tests panel structure, empty state, WS badge
+
+**Scripts:**
+- `scripts/mock_vehicle_client.py` — Async Python script using `websockets`; sends sensor updates every second; prints received commands; echoes last command in next sensor update; uses asyncio.Lock for safe concurrent sends
+
+**Docs:**
+- `docs/TELEOPERATION_PROTOTYPE.md` — What was added, what is real vs mocked, how to run the demo step by step, how to evolve in production (WebRTC, command ACKs, auth, fail-safe, Redis Pub/Sub, latency)
+- `docs/ADR.md` — Added Decision 8: teleoperation uses WebSockets + mock client
+- `README.md` — Added "Teleoperation Prototype" section with demo commands
+
+**Key design decisions:**
+- String status field instead of PostgreSQL enum — avoids `CREATE TYPE` / `DROP TYPE` complexity in migrations and makes adding new status values trivial
+- Separate `http_router` and `ws_router` in `teleoperation.py` — allows clean URL prefixes (`/api/teleoperation` vs `/ws/teleoperation`) without polluting `main.py`
+- In-memory `_ConnectionManager` with per-socket `asyncio.Lock` — prevents interleaved concurrent `send_json` calls which would corrupt the WebSocket frame stream
+- `window.location.hostname` for WebSocket URL — works for both `localhost` direct access and Docker/proxy environments without hardcoding a port
+
+**Assumptions:**
+- One operator per session; concurrent claim attempts return 409
+- `operator-1` is the default operator ID if none is provided (demo convenience)
+- `websockets` package is added to `requirements.txt` for the mock client; the FastAPI server itself needs no additional packages for WebSocket support
+- The conftest `_TRUNCATE` statement is updated to include `teleoperation_sessions` as the first table (child before parent for FK safety)
+
+---
+
+## Session 12 — Teleoperation Cleanup Pass
+
+**Prompt:**
+> Make a small final cleanup pass for the Teleoperation Handoff Prototype. Expand statuses,
+> fix lifecycle behavior (claimed distinct from active), update tests, fix README architecture
+> section, fix concurrency demo duplication, update docs.
+
+**Output:**
+
+**Backend:**
+- `app/schemas/teleoperation.py` — expanded `_VALID_STATUSES` to all six values: `requested`, `claimed`, `active`, `released`, `completed`, `failed`
+- `app/repositories/teleoperation.py` — `claim()` now sets status to `"claimed"` (not `"active"`); added `activate()` function; `get_active_session_for_vehicle()` now matches both `"claimed"` and `"active"` so vehicle sensor data is stored as soon as a session is claimed
+- `app/services/teleoperation.py` — `release_session()` allows release from `requested`, `claimed`, or `active`; added `activate_session()` called when operator WS connects
+- `app/api/teleoperation.py` — `operator_ws` handler calls `activate_session` after accepting the connection
+
+**Backend tests (`tests/test_teleoperation.py`):**
+- `test_claim_session`: assertion updated to `status == "claimed"`
+- Renamed `test_claim_already_active_session_returns_409` → `test_claim_already_claimed_session_returns_409`
+- `test_full_session_lifecycle`: claim assertion updated to `"claimed"`
+- Added `test_release_session_from_active_returns_released`: forces `active` status via raw SQL, then releases via HTTP
+
+**Frontend:**
+- `src/types/index.ts` — `TeleoperationStatus` expanded to include `claimed` and `completed`
+- `src/components/TeleoperationPanel.tsx` — `statusColor()` handles all six statuses; Connect button now shows for `claimed` and `active` sessions; Release button shows for `requested`, `claimed`, and `active`
+- `src/App.css` — added `.teleop-status--claimed` (indigo) and `.teleop-status--completed` (green) CSS classes
+- `src/__tests__/TeleoperationPanel.test.tsx` — refactored mock factory to be self-contained (avoids `vi.mock` hoisting issue with module-level consts); added `test_renders claimed status badge` and `test_command panel only appears after WS connects`
+
+**Documentation:**
+- `README.md` — Architecture section updated to distinguish polling (telemetry dashboard) from WebSockets (teleoperation); concurrency demo deduplicated and zone fixed to `charging_bay_2`; Teleoperation section updated with full lifecycle diagram and corrected demo order
+- `docs/TELEOPERATION_PROTOTYPE.md` — added polling vs WebSockets note, lifecycle diagram section, updated step descriptions
+- `docs/ADR.md` — Decision 8 updated with lifecycle states and polling/WS distinction
+
+**No new migration was needed.** The `status` column is already `String(20)` with no DB-level constraint. All new status values work without schema changes.
+
+**Key decisions:**
+- `claimed` is the HTTP-accessible state after claim; `active` is set only when the operator WebSocket actually connects — this gives a clear distinction between "assigned" and "live"
+- `completed` and `failed` are documented as intended terminal states but have no HTTP endpoint yet — they are listed in the schema and types so the lifecycle is clear without overbuilding
+- `vi.mock` factory is kept self-contained to avoid Vitest hoisting interaction with module-level const declarations
+
+---
+
+## Session 13 — Teleoperation Release Bug Fix
+
+**Prompt:**
+> Fix a teleoperation release-state bug found during manual testing. After releasing a session,
+> the UI allowed command buttons to remain active without a page refresh, and the mock vehicle
+> continued to receive commands after the session was already released. The persisted state
+> was correct; the live frontend/WebSocket state was stale.
+
+**Output:**
+
+**Root cause:** Three compounding issues:
+1. `releaseSession` in the hook called `disconnectOperator()` *after* `loadSessions()` — the WS stayed open during the async round-trip
+2. The backend HTTP release route did not close the live operator WebSocket
+3. Command buttons checked only `wsStatus !== 'connected'`, not the session's DB-side status
+
+**Backend fixes (`app/api/teleoperation.py`):**
+- Added `close_operator_session(session_id)` to `_ConnectionManager`: sends `{"type": "session_closed", "status": "released"}` to the operator WS, then closes it. The vehicle WebSocket is intentionally left open — the mock vehicle represents a physical device that stays online.
+- `release_session` HTTP route now calls `_manager.close_operator_session(session_id)` after committing the DB change.
+- Command loop in `operator_ws` now checks DB session status before `record_command` / `forward_command_to_vehicle`. If status is not `active`, sends `session_closed` and breaks — provides defence-in-depth against race conditions between HTTP release and in-flight command messages.
+
+**Frontend fixes (`src/hooks/useTeleoperation.ts`):**
+- `disconnectOperator` moved before `releaseSession` in the hook file to avoid a temporal dead zone error when adding it to `releaseSession`'s deps array.
+- `releaseSession` now calls `disconnectOperator()` immediately after the release API call succeeds, before `loadSessions()` — command buttons are disabled synchronously, not after a network round-trip.
+- `connectOperator`'s `onmessage` handler now handles `{"type": "session_closed"}`: clears `activeSessionId`, `wsStatus`, and `sensorData`; closes the WS; refreshes sessions — works even when the backend initiates the close rather than the user clicking Release.
+- `loadSessions` added to `connectOperator`'s deps array for correctness.
+
+**Frontend fixes (`src/components/TeleoperationPanel.tsx`):**
+- `canSendCommand = wsStatus === 'connected' && activeSession?.status === 'active'` — dual guard: WS connection state AND DB-side session status. Command buttons are disabled if either condition is false.
+
+**Tests added:**
+- `src/__tests__/TeleoperationPanelCommands.test.tsx` (new file, 4 tests): mocks `useTeleoperation` hook to verify command buttons are enabled only when `wsStatus === 'connected'` AND session status is `'active'`; verifies buttons are disabled when either condition fails; verifies command panel is absent when `activeSessionId` is null.
+- `src/__tests__/TeleoperationPanel.test.tsx`: added test verifying a `released` session shows no Claim, Connect, or Release action buttons.
+
+**Documentation:**
+- `docs/TELEOPERATION_PROTOTYPE.md` — added "Release behavior" subsection describing the two-layer protection (HTTP closes WS, status guard in command loop), why the vehicle WS is left open, and the full condition set for command button availability.
+- `docs/ADR.md` — reordered Decision 7 before Decision 8; updated Decision 7 to clarify WebSockets were not added to the telemetry dashboard during the hardening pass (they were added later for teleoperation).
+- `docs/PRODUCTION_READINESS.md` — fixed test count (30 → 44), updated infrastructure statement, added Teleoperation Handoff Prototype subsection.
+- `docs/SCALABILITY_NOTES.md` — clarified that WebSockets were deliberately excluded from the telemetry dashboard but later added for the teleoperation module as a different use case.
+
+**Result:** Backend 44/44, frontend 43/43, build clean. Manual verification confirmed: after clicking Release, command buttons disappear immediately without F5; mock vehicle continued sending sensor data (expected); no further commands reached the mock vehicle after release.

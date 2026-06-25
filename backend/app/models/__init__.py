@@ -6,6 +6,7 @@ from app.models.zone import ZoneCounter
 from app.models.anomaly import Anomaly
 from app.models.mission import Mission
 from app.models.maintenance import MaintenanceRecord
+from app.models.teleoperation import TeleoperationSession
 
 __all__ = [
     "Vehicle",
@@ -14,4 +15,5 @@ __all__ = [
     "Anomaly",
     "Mission",
     "MaintenanceRecord",
+    "TeleoperationSession",
 ]
